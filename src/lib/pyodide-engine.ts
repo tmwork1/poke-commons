@@ -148,9 +148,12 @@ type CalcDamagesJsonFn = (
   maxLethalAttackCount: number,
 ) => string;
 
+type CalcStatsJsonFn = (spec: PyProxy) => string;
+
 // --- モジュールスコープの状態(シングルトン) ---
 let pyodideSingleton: PyodideInterface | null = null;
 let calcDamagesJsonFn: CalcDamagesJsonFn | null = null;
+let calcStatsJsonFn: CalcStatsJsonFn | null = null;
 let initPromise: Promise<PyodideInterface> | null = null;
 let currentStatus: EngineStatus = "idle";
 let currentMessage = "未初期化";
@@ -300,6 +303,15 @@ def calc_damages_json(
     ]
 
     return json.dumps({"damages": damages, "lethal": lethal})
+
+
+def calc_stats_json(spec):
+    # fallback_move_name=None: 育成ビルダーでは技を1つも選んでいない状態でも実数値計算が
+    # 必要なため、_build_pokemon() 側の「moveNamesが空ならfallback_move_nameを使い、
+    # それも無ければ["はねる"]で補う」フォールバックにそのまま委ねる
+    # (spec.moveNamesが空リストでもエラーにならない)。
+    pokemon = _build_pokemon(spec, None)
+    return json.dumps({"stats": pokemon.stats})
 `;
 
 /**
@@ -346,6 +358,7 @@ export function initEngine(onProgress?: ProgressListener): Promise<PyodideInterf
       notify("loading", "jpokeの計算ヘルパーを準備中...");
       await pyodide.runPythonAsync(BOOTSTRAP_PYTHON);
       calcDamagesJsonFn = pyodide.globals.get("calc_damages_json") as CalcDamagesJsonFn;
+      calcStatsJsonFn = pyodide.globals.get("calc_stats_json") as CalcStatsJsonFn;
 
       pyodideSingleton = pyodide;
       notify("ready", "初期化完了");
@@ -355,6 +368,7 @@ export function initEngine(onProgress?: ProgressListener): Promise<PyodideInterf
       initPromise = null;
       pyodideSingleton = null;
       calcDamagesJsonFn = null;
+      calcStatsJsonFn = null;
       const message = err instanceof Error ? err.message : String(err);
       notify("error", `エラー: ${message}`);
       throw err;
@@ -413,5 +427,34 @@ export async function calcDamages(
     attackerPy.destroy();
     defenderPy.destroy();
     fieldPy.destroy();
+  }
+}
+
+/** 実数値(HP/攻撃/防御/特攻/特防/素早さ)。jpoke の `Pokemon.stats` と同じキー。 */
+export type Stats = Record<"hp" | "atk" | "def" | "spa" | "spd" | "spe", number>;
+
+/**
+ * jpoke で単体ポケモンの実数値(努力値・個体値・性格・レベルから算出される`Pokemon.stats`)を計算する。
+ *
+ * `initEngine()` が完了(ready)している必要がある。`calcDamages()` と同様、
+ * ユーザー入力は `pyodide.toPy()` 経由で固定のPython関数 (`calc_stats_json`) へ引数として渡すのみで、
+ * 文字列結合でPythonコードを組み立てることはしない。
+ *
+ * 育成ビルダー(Phase 3-2)では技を1つも選んでいない状態でも呼び出せる必要があるため、
+ * `spec.moveNames` が未指定・空配列のいずれでもエラーにならない
+ * (Python側の `_build_pokemon()` が `["はねる"]` にフォールバックする)。
+ */
+export async function calcStats(spec: PokemonSpec): Promise<{ stats: Stats }> {
+  if (!pyodideSingleton || !calcStatsJsonFn) {
+    throw new Error("エンジンが初期化されていません。先に initEngine() を呼んでください。");
+  }
+
+  const pyodide = pyodideSingleton;
+  const specPy = pyodide.toPy(spec);
+  try {
+    const resultJson = calcStatsJsonFn(specPy);
+    return JSON.parse(resultJson) as { stats: Stats };
+  } finally {
+    specPy.destroy();
   }
 }
