@@ -1,0 +1,224 @@
+---
+// Phase 1-7: クライアント計算エンジン(Pyodide + jpoke)の組み込み動作確認用ページ。
+//
+// 位置づけ: これは Phase 2 で作る本格的なダメージ計算UI(努力値入力・性格選択等の
+// フォーム一式)ではなく、あくまで下記を確認するための検証ページ。
+//   1. ボタンを押すまでPyodideのロードが始まらない(遅延初期化)
+//   2. ロード完了後にjpokeでダメージ計算ができる
+//   3. 同一ページ内で複数回計算しても、Pyodideの再ロードが発生しない(シングルトン化)
+//
+// このページ自体はSSR(サーバー)で描画されるプレースホルダーのみを出力し、
+// Pyodide関連の処理はすべて下部の <script> (ブラウザにのみバンドル・実行される)
+// に閉じ込めている。src/lib/pyodide-engine.ts はここ以外からimportしないこと
+// (SSR側・middleware.ts・worker.ts 等でimportすると `window` が無い環境で
+// 実行され失敗する)。
+---
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>計算エンジン検証 (PoC) | Poke-Commons</title>
+		<style>
+			body {
+				font-family: system-ui, sans-serif;
+				max-width: 720px;
+				margin: 2rem auto;
+				padding: 0 1rem;
+				line-height: 1.6;
+			}
+			h1 { font-size: 1.4rem; }
+			section {
+				border: 1px solid #ccc;
+				border-radius: 8px;
+				padding: 1rem;
+				margin: 1rem 0;
+			}
+			label { display: inline-block; min-width: 8em; }
+			.row { margin: 0.4rem 0; }
+			input[type="text"], input[type="number"] {
+				padding: 0.3em 0.5em;
+				min-width: 12em;
+			}
+			button {
+				padding: 0.5em 1.2em;
+				font-size: 1rem;
+				cursor: pointer;
+			}
+			button:disabled { cursor: not-allowed; opacity: 0.6; }
+			#engine-status { font-weight: bold; }
+			#engine-status[data-state="loading"] { color: #b8860b; }
+			#engine-status[data-state="ready"] { color: #2e7d32; }
+			#engine-status[data-state="error"] { color: #c62828; }
+			.spinner {
+				display: inline-block; width: 1em; height: 1em; border: 2px solid #ccc;
+				border-top-color: #b8860b; border-radius: 50%; animation: spin 0.8s linear infinite;
+				margin-right: 0.5em; vertical-align: -0.15em;
+			}
+			@keyframes spin { to { transform: rotate(360deg); } }
+			pre {
+				background: #f0f0f0;
+				padding: 1rem;
+				overflow-x: auto;
+				white-space: pre-wrap;
+				word-break: break-all;
+			}
+			#calc-log { font-size: 0.85em; color: #666; }
+		</style>
+	</head>
+	<body>
+		<h1>計算エンジン検証 (PoC)</h1>
+		<p>
+			Phase 1-7: クライアント計算エンジン(Pyodide + jpoke)の組み込み動作確認用ページです。
+			本格的な入力フォーム(努力値・性格など)は Phase 2 で実装します。
+		</p>
+
+		<section>
+			<h2>1. 計算エンジンの読み込み</h2>
+			<p>
+				<button id="init-button" type="button">計算エンジンを読み込む</button>
+			</p>
+			<p id="engine-status" data-state="idle">未初期化(ボタンを押すまでPyodideはロードされません)</p>
+		</section>
+
+		<section>
+			<h2>2. ダメージ計算</h2>
+			<p>
+				既定値は Phase 0 PoC と同一条件(攻撃側: ピカチュウ「でんきショック」/ 防御側: フシギダネ / seed=1)です。
+			</p>
+			<div class="row">
+				<label for="attacker-name">攻撃側ポケモン</label>
+				<input id="attacker-name" type="text" list="pokemon-list" value="ピカチュウ" />
+			</div>
+			<div class="row">
+				<label for="move-name">技</label>
+				<input id="move-name" type="text" list="move-list" value="でんきショック" />
+			</div>
+			<div class="row">
+				<label for="defender-name">防御側ポケモン</label>
+				<input id="defender-name" type="text" list="pokemon-list" value="フシギダネ" />
+			</div>
+			<div class="row">
+				<label for="seed">seed(乱数固定・任意)</label>
+				<input id="seed" type="number" value="1" />
+			</div>
+			<datalist id="pokemon-list"></datalist>
+			<datalist id="move-list"></datalist>
+			<p>
+				<button id="calc-button" type="button" disabled>計算する</button>
+				<span id="calc-count"></span>
+			</p>
+			<h3>calc_damages() の結果</h3>
+			<pre id="result">(計算前)</pre>
+			<p id="calc-log"></p>
+		</section>
+
+		<script>
+			import {
+				initEngine,
+				calcDamages,
+				isEngineReady,
+				type EngineProgress,
+			} from "../../lib/pyodide-engine";
+
+			const initButton = document.getElementById("init-button") as HTMLButtonElement;
+			const calcButton = document.getElementById("calc-button") as HTMLButtonElement;
+			const statusEl = document.getElementById("engine-status") as HTMLElement;
+			const resultEl = document.getElementById("result") as HTMLElement;
+			const calcCountEl = document.getElementById("calc-count") as HTMLElement;
+			const calcLogEl = document.getElementById("calc-log") as HTMLElement;
+
+			const attackerInput = document.getElementById("attacker-name") as HTMLInputElement;
+			const moveInput = document.getElementById("move-name") as HTMLInputElement;
+			const defenderInput = document.getElementById("defender-name") as HTMLInputElement;
+			const seedInput = document.getElementById("seed") as HTMLInputElement;
+
+			let calcCount = 0;
+
+			function renderProgress(progress: EngineProgress) {
+				statusEl.dataset.state = progress.status;
+				const spinner = progress.status === "loading" ? '<span class="spinner"></span>' : "";
+				statusEl.innerHTML = spinner + progress.message;
+				calcButton.disabled = progress.status !== "ready";
+				initButton.disabled = progress.status === "loading" || progress.status === "ready";
+			}
+
+			// オートコンプリート用の軽量JSON(build:master-data 生成物)を読み込み、
+			// datalist に反映する。あくまで簡易実装(本格的なオートコンプリートUIはPhase 2)。
+			async function loadAutocomplete() {
+				try {
+					const [pokemonRes, moveRes] = await Promise.all([
+						fetch("/master-data/autocomplete/pokemon.json"),
+						fetch("/master-data/autocomplete/moves.json"),
+					]);
+					const pokemonList = (await pokemonRes.json()) as Array<{ name: string }>;
+					const moveList = (await moveRes.json()) as Array<{ name: string }>;
+
+					const pokemonDatalist = document.getElementById("pokemon-list") as HTMLDataListElement;
+					const moveDatalist = document.getElementById("move-list") as HTMLDataListElement;
+
+					const pokemonFragment = document.createDocumentFragment();
+					for (const { name } of pokemonList) {
+						const option = document.createElement("option");
+						option.value = name;
+						pokemonFragment.appendChild(option);
+					}
+					pokemonDatalist.appendChild(pokemonFragment);
+
+					const moveFragment = document.createDocumentFragment();
+					for (const { name } of moveList) {
+						const option = document.createElement("option");
+						option.value = name;
+						moveFragment.appendChild(option);
+					}
+					moveDatalist.appendChild(moveFragment);
+				} catch (err) {
+					console.warn("オートコンプリート用データの読み込みに失敗しました", err);
+				}
+			}
+
+			initButton.addEventListener("click", () => {
+				// ここが唯一のPyodide初期化トリガー。ページ読み込み時には呼ばれない。
+				initEngine(renderProgress).catch((err) => {
+					console.error(err);
+				});
+			});
+
+			calcButton.addEventListener("click", async () => {
+				if (!isEngineReady()) {
+					return;
+				}
+				calcButton.disabled = true;
+				resultEl.textContent = "計算中...";
+				try {
+					const seedValue = seedInput.value.trim();
+					const seed = seedValue === "" ? undefined : Number(seedValue);
+
+					const started = performance.now();
+					const { damages } = await calcDamages(
+						{ name: attackerInput.value.trim() },
+						{ name: defenderInput.value.trim() },
+						moveInput.value.trim(),
+						{ seed },
+					);
+					const elapsedMs = Math.round(performance.now() - started);
+
+					calcCount += 1;
+					resultEl.textContent = JSON.stringify(damages);
+					calcCountEl.textContent = `(実行回数: ${calcCount}回)`;
+					calcLogEl.textContent =
+						`最終実行: ${elapsedMs}ms (2回目以降がこの程度の速さなら、Pyodideの再初期化は発生していません。` +
+						`ネットワークタブで pyodide.js / *.whl の再取得が無いことも合わせて確認してください)`;
+				} catch (err) {
+					console.error(err);
+					resultEl.textContent = "エラー: " + (err instanceof Error ? err.message : String(err));
+				} finally {
+					calcButton.disabled = !isEngineReady();
+				}
+			});
+
+			renderProgress({ status: "idle", message: "未初期化(ボタンを押すまでPyodideはロードされません)" });
+			void loadAutocomplete();
+		</script>
+	</body>
+</html>

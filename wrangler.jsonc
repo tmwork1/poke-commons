@@ -1,0 +1,15 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"compatibility_date": "2026-07-23",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"name": "poke-commons",
+	"main": "./src/worker.ts",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true
+	}
+	// triggers/crons (Cron Trigger) は Phase 5 の集計バッチ導入時に追加する(開発プラン §2.5, §3 Phase5-1)。
+}

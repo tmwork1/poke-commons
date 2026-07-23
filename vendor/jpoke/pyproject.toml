@@ -1,0 +1,106 @@
+[project]
+name = "jpoke"
+version = "0.2.0"
+description = "Event-driven Pokemon Champions single-battle simulation and damage calculation library (unofficial)"
+authors = [
+    { name = "Tomoo Mari", email = "tmtm.holmes@gmail.com" }
+]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+keywords = ["pokemon", "battle", "simulator", "damage-calculator"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Games/Entertainment :: Turn Based Strategy",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Natural Language :: Japanese",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/tmwork1/jpoke"
+Repository = "https://github.com/tmwork1/jpoke"
+Issues = "https://github.com/tmwork1/jpoke/issues"
+Changelog = "https://github.com/tmwork1/jpoke/blob/main/CHANGELOG.md"
+Documentation = "https://tmwork1.github.io/jpoke/"
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+    "mkdocs-include-markdown-plugin>=6.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "jupytext>=1.16",
+    "papermill>=2.6",
+    "ipykernel>=6.29",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jpoke = ["py.typed"]
+"jpoke.data" = ["**/*.json", "**/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 200
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, B: flake8-bugbear（B006 が可変デフォルト引数を検出する）
+select = ["E", "F", "W", "B"]
+ignore = [
+    "E741",  # あいまいな変数名 l: data/move.py が handlers.lethal を l として import している
+    "B905",  # zip(strict=) は挙動変更（長さ不一致で例外）を伴うため個別に判断して導入する
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]        # 再エクスポートのための import
+"src/jpoke/types/*.py" = ["E501"]  # scripts/generate_literals による自動生成の長行
+"scripts/**" = ["F841"]            # 実験用スクリプトの未使用変数は許容
+"examples/**/*.ipynb" = ["F404"]   # Colab向け %pip install セルを先頭に置くため
+                                    # from __future__ import annotations がファイル
+                                    # 先頭にならない（notebookの自然な作法を優先する）
+
+[tool.mypy]
+# 段階導入: まず core のみを対象にし、警告を解消しながら対象を広げる
+# follow_imports = "silent" で core が import する core 外モジュール（handlers/model 等）の
+# 型エラーは黙殺する（段階導入の対象外のため）。core 自身のエラーのみ報告させる。
+python_version = "3.11"
+files = ["src/jpoke/core"]
+mypy_path = "src"
+ignore_missing_imports = true
+check_untyped_defs = false
+follow_imports = "silent"
+
+[tool.coverage.run]
+source = ["src/jpoke"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

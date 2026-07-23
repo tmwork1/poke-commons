@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python build frontend
+        # vendor/jpoke (scripts/build-master-data) の wheel ビルドに `python -m build` を使う。
+        run: pip install build
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Stub Supabase roles
+        # poke-commons はログイン無しの完全匿名サービスで、マイグレーション
+        # (migrations/001_initial.sql〜003_grant_table_privileges.sql) は auth.users テーブルや
+        # auth.uid() のような Supabase 固有関数には依存しない(poke-research と異なり auth
+        # スキーマのスタブは不要)。003番が anon/authenticated/service_role ロールへの
+        # GRANT 文を発行するため、素の postgres:16 に無いこれらのロールだけを作成する。
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres <<'SQL'
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role; END IF;
+            END $$;
+SQL
+      - name: Apply migrations to a fresh database
+        run: npm run migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres

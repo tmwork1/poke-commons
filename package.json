@@ -1,0 +1,30 @@
+{
+	"name": "poke-commons",
+	"type": "module",
+	"version": "0.0.1",
+	"license": "MIT",
+	"engines": {
+		"node": ">=22.15.0"
+	},
+	"scripts": {
+		"dev": "astro dev",
+		"test": "node --test \"tests/**/*.test.ts\"",
+		"build:master-data": "node scripts/build-master-data/build.mjs",
+		"build": "npm run build:master-data && astro build",
+		"preview": "npm run build && astro preview",
+		"astro": "astro",
+		"generate-types": "wrangler types",
+		"deploy": "npm run build && wrangler deploy",
+		"cf-typegen": "wrangler types",
+		"migrate": "node ./scripts/db/run-migrations.mjs"
+	},
+	"dependencies": {
+		"@astrojs/cloudflare": "^14.1.1",
+		"@supabase/supabase-js": "^2.0.0",
+		"astro": "^7.0.6",
+		"pg": "^8.10.0"
+	},
+	"devDependencies": {
+		"wrangler": "^4.107.0"
+	}
+}

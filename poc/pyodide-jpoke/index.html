@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>jpoke on Pyodide PoC</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  #status { font-weight: bold; }
+  #status.loading { color: #b8860b; }
+  #status.done { color: #2e7d32; }
+  #status.error { color: #c62828; }
+  pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
+  .spinner {
+    display: inline-block; width: 1em; height: 1em; border: 2px solid #ccc;
+    border-top-color: #b8860b; border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 0.5em; vertical-align: -0.15em;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <h1>jpoke on Pyodide PoC</h1>
+  <p id="status" class="loading"><span class="spinner"></span>Pyodideを初期化中... (初回は数秒〜十数秒かかります)</p>
+
+  <h2>入力条件</h2>
+  <pre id="condition">攻撃側: ピカチュウ（でんきショック）
+防御側: フシギダネ
+seed: 1</pre>
+
+  <h2>calc_damages() の結果</h2>
+  <pre id="result">(計算前)</pre>
+
+  <script>
+    async function main() {
+      const statusEl = document.getElementById("status");
+      const resultEl = document.getElementById("result");
+      const setStatus = (text, cls) => {
+        statusEl.className = cls;
+        statusEl.innerHTML = cls === "loading" ? `<span class="spinner"></span>${text}` : text;
+      };
+
+      try {
+        setStatus("Pyodideランタイムをロード中...", "loading");
+        const pyodide = await loadPyodide();
+
+        setStatus("micropipをロード中...", "loading");
+        await pyodide.loadPackage("micropip");
+
+        setStatus("jpoke (wheel) をインストール中...", "loading");
+        const micropip = pyodide.pyimport("micropip");
+        // ローカルwheelへの相対URL。Pyodideのmicropipは相対URLをページのURLからの相対として解決する。
+        await micropip.install("./wheels/jpoke-0.2.0-py3-none-any.whl");
+
+        setStatus("jpokeでダメージ計算を実行中...", "loading");
+        const resultJson = await pyodide.runPythonAsync(`
+import json
+from jpoke import Battle, Player, Pokemon
+
+player1 = Player("Player 1")
+player1.team.append(Pokemon("ピカチュウ", move_names=["でんきショック"]))
+player2 = Player("Player 2")
+player2.team.append(Pokemon("フシギダネ"))
+
+battle = Battle(player1, player2, seed=1)
+battle.start()
+
+attacker, defender = battle.actives
+move = attacker.moves[0]
+damages = battle.calc_damages(attacker, defender, move)
+
+json.dumps(damages)
+        `);
+
+        window.__jpokeResult = resultJson;
+        resultEl.textContent = resultJson;
+        setStatus("完了", "done");
+      } catch (err) {
+        console.error(err);
+        setStatus("エラー: " + err.message, "error");
+        window.__jpokeError = String(err);
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
