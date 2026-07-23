@@ -517,6 +517,68 @@ const SIDES: Array<{ prefix: "atk" | "def"; label: string }> = [
 				renderSuggestionList(commonOpponentsEl, commonOpponents);
 			}
 
+			// --- Phase 3-3: 育成ビルダーからの読み込み(?build=<share_slug>) ---
+			interface BuildData {
+				pokemon_name?: string | null;
+				nature?: string | null;
+				ability_name?: string | null;
+				item_name?: string | null;
+				tera_type?: string | null;
+				evs?: Array<number | null> | null;
+				ivs?: Array<number | null> | null;
+				move_names?: Array<string | null> | null;
+			}
+
+			function applyBuildToAttacker(data: BuildData): void {
+				if (data.pokemon_name != null) {
+					el<HTMLInputElement>("atk-name").value = data.pokemon_name;
+				}
+				if (data.nature != null) {
+					el<HTMLSelectElement>("atk-nature").value = data.nature;
+				}
+				if (data.ability_name != null) {
+					el<HTMLInputElement>("atk-ability").value = data.ability_name;
+				}
+				if (data.item_name != null) {
+					el<HTMLInputElement>("atk-item").value = data.item_name;
+				}
+				if (data.tera_type != null) {
+					el<HTMLSelectElement>("atk-tera").value = data.tera_type;
+				}
+				const firstMove = data.move_names?.[0];
+				if (firstMove != null) {
+					el<HTMLInputElement>("move-name").value = firstMove;
+				}
+				STAT_KEYS.forEach((stat, i) => {
+					const ev = data.evs?.[i];
+					if (ev != null) {
+						el<HTMLInputElement>(`atk-ev-${stat}`).value = String(ev);
+					}
+					const iv = data.ivs?.[i];
+					if (iv != null) {
+						el<HTMLInputElement>(`atk-iv-${stat}`).value = String(iv);
+					}
+				});
+			}
+
+			async function loadBuildFromQuery(): Promise<void> {
+				const slug = new URLSearchParams(location.search).get("build");
+				if (!slug) return;
+				try {
+					const res = await fetch(`/api/builds/${encodeURIComponent(slug)}`);
+					if (!res.ok) {
+						console.warn(`育成データの読み込みに失敗しました (status=${res.status})`);
+						return;
+					}
+					const body = (await res.json()) as { data?: BuildData };
+					if (!body.data) return;
+					applyBuildToAttacker(body.data);
+					void loadSuggestions(atkNameInput.value.trim());
+				} catch (err) {
+					console.warn("育成データの読み込みに失敗しました", err);
+				}
+			}
+
 			// --- イベント配線 ---
 			initButton.addEventListener("click", () => {
 				// ここが唯一のPyodide初期化トリガー。ページ読み込み時には呼ばれない。
@@ -587,6 +649,7 @@ const SIDES: Array<{ prefix: "atk" | "def"; label: string }> = [
 
 			renderProgress({ status: "idle", message: "未初期化(ボタンを押すまでPyodideはロードされません)" });
 			void loadAutocomplete();
+			void loadBuildFromQuery();
 			void loadSuggestions(atkNameInput.value.trim());
 			// Pyodide自体のロードは開始しない(SW登録のみ)。2回目以降の訪問で
 			// pyodide.js/wheelの再ダウンロードを避けるため、ページ読み込み時に登録しておく。
