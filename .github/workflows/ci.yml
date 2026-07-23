@@ -69,21 +69,42 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Stub Supabase roles
-        # poke-commons はログイン無しの完全匿名サービスで、マイグレーション
+      - name: Stub Supabase auth schema
+        # poke-commons はv1まではログイン無しの完全匿名サービスで、マイグレーション
         # (migrations/001_initial.sql〜003_grant_table_privileges.sql) は auth.users テーブルや
-        # auth.uid() のような Supabase 固有関数には依存しない(poke-research と異なり auth
-        # スキーマのスタブは不要)。003番が anon/authenticated/service_role ロールへの
-        # GRANT 文を発行するため、素の postgres:16 に無いこれらのロールだけを作成する。
+        # auth.uid() のような Supabase 固有機能には依存しなかった。v2(migrations/
+        # 004_owned_pokemon.sql〜005_owned_pokemon_rls.sql)で育成済みポケモン管理機能向けに
+        # auth.uid() ベースの本人限定RLSポリシーを初めて導入したため、DDL検証に必要な最小限の
+        # auth スキーマ・auth.users テーブル・auth.uid() 関数を用意する(実際の認可挙動はここでは
+        # 検証しない。RLSポリシーの実地検証は後続の「RLSポリシーテスト」ステップで行う)。
+        # あわせて、003番以降が GRANT 文で参照する anon/authenticated/service_role ロール
+        # (旧「Stub Supabase roles」ステップの内容)もここで一本化して作成する。
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d postgres <<'SQL'
+            CREATE SCHEMA IF NOT EXISTS auth;
+            CREATE TABLE IF NOT EXISTS auth.users (
+              id uuid PRIMARY KEY,
+              email text,
+              raw_user_meta_data jsonb DEFAULT '{}'::jsonb
+            );
+
             DO $$ BEGIN
               IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
               IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
               IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role; END IF;
             END $$;
+
+            CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 SQL
       - name: Apply migrations to a fresh database
         run: npm run migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      - name: Run RLS policy tests (owned_pokemon / opponent_notes)
+        # migrations/004・005 で追加した本人限定RLSポリシーの実地テスト。auth.uid() をGUCベースの
+        # 実装に差し替えたうえで2ユーザーを切り替え、他人の行にアクセスできないことを検証する
+        # (詳細はテストファイル先頭のコメント参照)。
+        run: node --test tests/db/owned-pokemon-rls.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          RUN_DB_TESTS: '1'

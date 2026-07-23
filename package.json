@@ -19,10 +19,12 @@
 		"generate-types": "wrangler types",
 		"deploy": "npm run build && wrangler deploy",
 		"cf-typegen": "wrangler types",
-		"migrate": "node ./scripts/db/run-migrations.mjs"
+		"migrate": "node ./scripts/db/run-migrations.mjs",
+		"seed-dev-user": "node ./scripts/db/seed-dev-user.mjs"
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "^14.1.1",
+		"@supabase/ssr": "^0.12.3",
 		"@supabase/supabase-js": "^2.0.0",
 		"astro": "^7.0.6",
 		"pg": "^8.10.0"

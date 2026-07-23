@@ -1,5 +1,7 @@
 # environment variables
 .env
+.env.local
+.env.*.local
 .env.production
 
 # node dependencies (PoC計測スクリプト用に一時インストール)

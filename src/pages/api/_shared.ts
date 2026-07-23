@@ -32,6 +32,22 @@ export function badRequest(message: string): Response {
 // 「桁違いに巨大なペイロードを弾く」という目的には十分な精度)
 export const MAX_REQUEST_BODY_LENGTH = 64 * 1024;
 
+// ログインユーザーの Cookie セッションで認可される書き込みAPI(owned-pokemon等)向けの
+// 簡易CSRF対策。既存の匿名書き込みAPI(builds.ts/damage-calcs.ts)はログインCookieを
+// 前提にしないため対象外(Phase A残課題、育成データ管理計画.md §8 Phase A-3の指摘を反映)。
+// Origin ヘッダを送らない一部の非ブラウザ/古いブラウザのリクエストまで一律に弾くと
+// 正当な同一オリジンの fetch まで壊しかねないため、Origin ヘッダがある場合のみ検証する
+// (Same-Site Cookie が既定で有効なモダンブラウザに対しては十分な多層防御になる)。
+export function isSameOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return true;
+  try {
+    return new URL(origin).origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function readJsonBody<T>(request: Request): Promise<{ data: T | null; response?: Response }> {
   try {
     // 空ボディは null として扱い、JSON でない入力だけをエラーにする。

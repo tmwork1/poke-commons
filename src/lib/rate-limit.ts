@@ -59,3 +59,16 @@ export function createFixedWindowRateLimiter(options: RateLimitOptions): FixedWi
 // 単位時間あたりの計算・検索操作としては十分すぎるくらいの余裕を見て、60秒で60回まで。
 export const EVENTS_RATE_LIMIT: RateLimitOptions = { windowMs: 60_000, max: 60 };
 export const eventsRateLimiter = createFixedWindowRateLimiter(EVENTS_RATE_LIMIT);
+
+// POST /api/owned-pokemon(個体の新規作成)に適用する専用インスタンス
+// (育成データ管理計画.md §8 Phase C-1)。キーには匿名の session_hash/IP ではなく
+// ログインユーザーの user.id を使う("別軸"にするため、eventsRateLimiter とは
+// Mapを共有しない独立したインスタンスにしている)。設定値自体は同程度の余裕を持たせて
+// eventsRateLimiter と揃えている。
+export const ownedPokemonRateLimiter = createFixedWindowRateLimiter(EVENTS_RATE_LIMIT);
+
+// POST /api/opponent-notes(対戦相手メモの新規作成)に適用する専用インスタンス
+// (育成データ管理計画.md §8 Phase D-1)。ownedPokemonRateLimiter と同じ設定値・同じく
+// user.id をキーにするが、Mapを共有しない独立したインスタンスにしている(別エンドポイント・
+// 別軸で計測するため)。
+export const opponentNotesRateLimiter = createFixedWindowRateLimiter(EVENTS_RATE_LIMIT);
