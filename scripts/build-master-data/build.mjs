@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * jpoke (vendor/jpoke) を単一の情報源として、以下2種類の静的アセットを
+ * jpoke (vendor/jpoke) を単一の情報源として、以下3種類の静的アセットを
  * public/master-data/ 配下に生成するビルドスクリプト。
  *
  *   1. オートコンプリート用軽量 JSON: public/master-data/autocomplete/*.json
- *   2. Pyodide 実行用 wheel:          public/master-data/pyodide/wheels/*.whl
+ *   2. 検索結果の詳細表示用 JSON:     public/master-data/detail/*.json (Phase 4-1)
+ *   3. Pyodide 実行用 wheel:          public/master-data/pyodide/wheels/*.whl
  *
  * 実行: npm run build:master-data
  *
@@ -42,6 +43,7 @@ const systemPython = process.platform === 'win32' ? 'python' : 'python3';
 const jpokePython = process.env.JPOKE_PYTHON ?? (existsSync(venvPython) ? venvPython : systemPython);
 
 const autocompleteOutDir = path.join(repoRoot, 'public', 'master-data', 'autocomplete');
+const detailOutDir = path.join(repoRoot, 'public', 'master-data', 'detail');
 const wheelOutDir = path.join(repoRoot, 'public', 'master-data', 'pyodide', 'wheels');
 
 function run(command, args, options = {}) {
@@ -71,14 +73,15 @@ function assertPythonUsable() {
 }
 
 function buildAutocomplete() {
-  console.log('\n=== 1. オートコンプリート用軽量 JSON を生成 ===');
+  console.log('\n=== 1. オートコンプリート用軽量 JSON + 検索詳細用 JSON を生成 ===');
   assertExists(jpokeDir, 'JPOKE_DIR 環境変数で jpoke リポジトリの場所を指定してください。');
   assertPythonUsable();
 
   mkdirSync(autocompleteOutDir, { recursive: true });
+  mkdirSync(detailOutDir, { recursive: true });
 
   const extractScript = path.join(__dirname, 'extract_autocomplete.py');
-  run(jpokePython, [extractScript, jpokeSrcDir, autocompleteOutDir]);
+  run(jpokePython, [extractScript, jpokeSrcDir, autocompleteOutDir, detailOutDir]);
 }
 
 function buildPyodideWheel() {
