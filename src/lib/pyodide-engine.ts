@@ -70,16 +70,51 @@ export interface PokemonSpec {
   ivs?: number[];
 }
 
+/**
+ * ダメージ計算に影響する場の状態。
+ * 天候・地形に加え、壁技(ダメージそのものを軽減するサイドフィールド)のみを対象とする。
+ * おいかぜ・設置技など、ダメージ計算(`Battle.calc_damages()`)自体には影響しない
+ * サイドフィールドはPhase 2-1のスコープ外(育成ビルダー等、行動順や設置ダメージが
+ * 絡む場面で必要になったら別途追加する)。
+ */
+export interface FieldSpec {
+  /** 天候名 (例: "はれ" "あめ" "すなあらし" "ゆき" "おおひでり" "おおあめ" "らんきりゅう")。省略時は天候なし */
+  weather?: string;
+  /** 地形名 (例: "エレキフィールド" "グラスフィールド" "サイコフィールド" "ミストフィールド")。省略時は地形なし */
+  terrain?: string;
+  /**
+   * 防御側に発動させておくサイドフィールド効果名の一覧
+   * (例: ["リフレクター"], ["ひかりのかべ"], ["オーロラベール"])。
+   * `Battle.calc_damages()` はダメージ軽減判定に発動有無のみを見て持続ターン数は見ないため、
+   * 持続ターン数(count)は固定値で発動させれば十分。
+   */
+  defenderSideFields?: string[];
+}
+
 export interface CalcDamagesOptions {
   /** 乱数シード。省略時はjpoke側で毎回ランダムに決定される(結果は非決定的になる) */
   seed?: number;
   /** 急所固定で計算するか */
   critical?: boolean;
+  /** 天候・地形・壁などの場の状態。省略時は素の場(天候・地形なし)で計算する */
+  field?: FieldSpec;
+  /** 致死率を計算する最大攻撃回数(1発〜この回数まで)。省略時は6 */
+  maxLethalAttackCount?: number;
+}
+
+/** 攻撃をN回撃った時点での致死率(HPが0になる確率、0.0〜1.0)。 */
+export interface LethalResult {
+  /** 何発目か(1始まり) */
+  attackCount: number;
+  /** その時点までの累計致死率 */
+  probability: number;
 }
 
 export interface CalcDamagesResult {
   /** 乱数16段階を考慮した、あり得るダメージ値の一覧 */
   damages: number[];
+  /** 1発目〜maxLethalAttackCount発目までの致死率一覧 */
+  lethal: LethalResult[];
 }
 
 // --- Pyodide型の最小定義(公式の型パッケージを追加導入せずに済ませるための最小限のもの) ---
@@ -109,6 +144,8 @@ type CalcDamagesJsonFn = (
   moveName: string,
   seed: number | null,
   critical: boolean,
+  fieldSpec: PyProxy,
+  maxLethalAttackCount: number,
 ) => string;
 
 // --- モジュールスコープの状態(シングルトン) ---
@@ -217,7 +254,24 @@ def _build_pokemon(spec, fallback_move_name):
     return pokemon
 
 
-def calc_damages_json(attacker_spec, defender_spec, move_name, seed, critical):
+def _apply_field(battle, defender_player, field_spec):
+    # count(持続ターン数)はダメージ計算(calc_damages/calc_lethal)の判定には使われず
+    # 発動有無のみが見られるため、固定値5(既定の持続ターン数)で発動させれば十分。
+    weather = field_spec.get("weather")
+    if weather:
+        battle.set_weather(weather, 5)
+
+    terrain = field_spec.get("terrain")
+    if terrain:
+        battle.set_terrain(terrain, 5)
+
+    for name in field_spec.get("defenderSideFields") or []:
+        battle.activate_side_field(defender_player, name, 5)
+
+
+def calc_damages_json(
+    attacker_spec, defender_spec, move_name, seed, critical, field_spec, max_lethal_attack_count
+):
     player1 = Player("Attacker")
     attacker = _build_pokemon(attacker_spec, move_name)
     player1.team.append(attacker)
@@ -228,6 +282,7 @@ def calc_damages_json(attacker_spec, defender_spec, move_name, seed, critical):
 
     battle = Battle(player1, player2, seed=seed)
     battle.start()
+    _apply_field(battle, player2, field_spec)
 
     active_attacker, active_defender = battle.actives
     move = next(
@@ -235,7 +290,16 @@ def calc_damages_json(attacker_spec, defender_spec, move_name, seed, critical):
         active_attacker.moves[0],
     )
     damages = battle.calc_damages(active_attacker, active_defender, move, critical=critical)
-    return json.dumps({"damages": damages})
+
+    lethal_results = battle.calc_lethal(
+        active_attacker, move, critical=critical, max_attack=max_lethal_attack_count
+    )
+    lethal = [
+        {"attackCount": result.attack_count, "probability": result.lethal_probability}
+        for result in lethal_results
+    ]
+
+    return json.dumps({"damages": damages, "lethal": lethal})
 `;
 
 /**
@@ -325,16 +389,29 @@ export async function calcDamages(
   const pyodide = pyodideSingleton;
   const seed = options.seed ?? null;
   const critical = options.critical ?? false;
+  const maxLethalAttackCount = options.maxLethalAttackCount ?? 6;
 
   const attackerPy = pyodide.toPy(attackerSpec);
   const defenderPy = pyodide.toPy(defenderSpec);
+  // field未指定時も空オブジェクトを渡し、Python側は毎回 dict として扱えるようにする
+  // (None分岐をBOOTSTRAP_PYTHON側に増やさないための単純化)。
+  const fieldPy = pyodide.toPy(options.field ?? {});
   try {
-    const resultJson = calcDamagesJsonFn(attackerPy, defenderPy, moveName, seed, critical);
+    const resultJson = calcDamagesJsonFn(
+      attackerPy,
+      defenderPy,
+      moveName,
+      seed,
+      critical,
+      fieldPy,
+      maxLethalAttackCount,
+    );
     return JSON.parse(resultJson) as CalcDamagesResult;
   } finally {
     // toPy() が生成したPythonオブジェクトはJS側で明示的に破棄する
     // (Pyodideのメモリ管理規約。破棄しないとPython側の参照が残りリークする)。
     attackerPy.destroy();
     defenderPy.destroy();
+    fieldPy.destroy();
   }
 }
