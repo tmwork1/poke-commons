@@ -80,6 +80,8 @@ export async function POST({ request, cookies }: APIContext): Promise<Response> 
 
   // events への二重記録: 集計は入力(計算条件)のみに依存する方針 (§2.6) のため、
   // client_result はここには含めない (damage_calcs.client_result にのみ保存する)。
+  // これは集計用の副次的な記録であり、失敗してもユーザーにとっての主目的(計算ログの保存)は
+  // 既に達成済みなので、リクエスト全体を失敗させない(builds.ts と同じ方針)。
   const { error: eventError } = await supabase.from('events').insert({
     event_type: 'damage_calc',
     payload: { attacker_name, defender_name, move_name, attacker_build, defender_build, field },
@@ -87,11 +89,8 @@ export async function POST({ request, cookies }: APIContext): Promise<Response> 
   });
 
   if (eventError) {
-    // damage_calcs への書き込みは既に成功しているため取り消さない (素朴な2回INSERT、片方だけ
-    // 成功する可能性は許容する - タスク仕様どおり)。ログだけ残して500を返す。
     // eslint-disable-next-line no-console
     console.error('Failed to insert events (damage_calc):', eventError);
-    return jsonResponse({ error: 'Failed to record damage calc' }, 500);
   }
 
   return jsonResponse({ data: { id: data?.id } }, 201);

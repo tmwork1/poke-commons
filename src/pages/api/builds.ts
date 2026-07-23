@@ -111,6 +111,10 @@ export async function POST({ request, cookies }: APIContext): Promise<Response> 
   }
 
   // events への二重記録: 保存内容(計算条件相当の入力)のみを正データとして記録する (§2.6と同じ方針)。
+  // これは集計用の副次的な記録であり、失敗してもユーザーにとっての主目的(育成の保存・
+  // share_slugの発行)は既に達成済みなので、リクエスト全体を失敗させない
+  // (以前はここで500を返しており、既にDBへ保存されたshare_slugをユーザーが二度と
+  // 知れなくなる不具合があった)。
   const { error: eventError } = await supabase.from('events').insert({
     event_type: 'build_save',
     payload: { pokemon_name, nature, ability_name, item_name, tera_type, evs, ivs, move_names },
@@ -118,10 +122,8 @@ export async function POST({ request, cookies }: APIContext): Promise<Response> 
   });
 
   if (eventError) {
-    // builds への書き込みは既に成功しているため取り消さない (damage-calcs.ts と同じ、素朴な2回INSERT)。
     // eslint-disable-next-line no-console
     console.error('Failed to insert events (build_save):', eventError);
-    return jsonResponse({ error: 'Failed to save build' }, 500);
   }
 
   return jsonResponse({ data: { id: data.id, share_slug: data.share_slug } }, 201);
