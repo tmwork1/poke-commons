@@ -22,3 +22,23 @@ export async function getSupabaseAdminClient() {
 		auth: { autoRefreshToken: false, persistSession: false },
 	});
 }
+
+// 公開閲覧専用 (anon ロール)。RLS の *_public_read ポリシー (migrations/002_enable_rls.sql) を
+// 経由してのみ読み取れる、最小権限のクライアント。書き込みAPIと違い service_role は不要 -
+// 閲覧系エンドポイントで誤って書き込み権限を持たせないための最小権限の原則。
+export async function getSupabasePublicClient() {
+	const SUPABASE_URL = readEnv('SUPABASE_URL');
+	const SUPABASE_PUBLISHABLE_KEY = readEnv('SUPABASE_PUBLISHABLE_KEY');
+
+	const { createClient } = await import('@supabase/supabase-js');
+
+	if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+		// eslint-disable-next-line no-console
+		console.warn('Supabase env vars not set: SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY');
+	}
+
+	return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+		detectSessionInUrl: false,
+		auth: { autoRefreshToken: false, persistSession: false },
+	});
+}
