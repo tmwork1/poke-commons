@@ -18,10 +18,11 @@
  *   登録可能なリスナーとして扱う。登録した瞬間に現在の状態を1回通知する
  *   (途中から購読しても現在地を把握できるようにするため)。
  *
- * 今後の課題(スコープ外・未実装):
- * - Service Worker / IndexedDB によるページ再読み込みをまたいだキャッシュ
- *   (Pyodide コア一式・jpoke wheel のオフラインキャッシュ)。
- *   今回実装するのはあくまで「同一ページ内でのインスタンス使い回し」まで。
+ * - オフラインキャッシュ: `registerOfflineCache()` で `public/pyodide-sw.js` を登録すると、
+ *   Pyodide CDN (`cdn.jsdelivr.net/pyodide/`) と jpoke wheel (`/master-data/pyodide/`) への
+ *   GETリクエストのみが Service Worker の Cache Storage に cache-first で保存される。
+ *   初回訪問時はSWのインストール完了までは通常どおりネットワークから取得するが、
+ *   2回目以降のページ再読み込みでは同一オリジン内でキャッシュヒットし、再ダウンロードを回避できる。
  */
 
 // Pyodide本体はCDNから読み込む(PoC: poc/pyodide-jpoke/index.html と同じCDN・バージョン)。
@@ -33,6 +34,9 @@ const PYODIDE_SCRIPT_URL = `${PYODIDE_CDN_BASE}pyodide.js`;
 // build:master-data (scripts/build-master-data/build.mjs) が生成する静的アセット。
 // public/ 配下はAstroが素通しで配信するため、このパスがそのままURLになる。
 const JPOKE_WHEEL_URL = "/master-data/pyodide/wheels/jpoke-0.2.0-py3-none-any.whl";
+
+// public/pyodide-sw.js: Pyodide CDN + jpoke wheel のみを対象にした cache-first Service Worker。
+const SERVICE_WORKER_URL = "/pyodide-sw.js";
 
 export type EngineStatus = "idle" | "loading" | "ready" | "error";
 
@@ -126,6 +130,24 @@ function notify(status: EngineStatus, message: string): void {
 /** 現在の初期化状態を購読なしで取得したい場合用。 */
 export function getEngineProgress(): EngineProgress {
   return { status: currentStatus, message: currentMessage };
+}
+
+/**
+ * Pyodideコア一式・jpoke wheel のオフラインキャッシュ用 Service Worker を登録する。
+ *
+ * `initEngine()` とは独立した処理で、Pyodide自体のロードは一切開始しない
+ * (ページ読み込み時に呼んでも遅延初期化方針に反しない)。ブラウザが
+ * Service Worker 未対応の場合は何もしない。登録は一度で十分なため、
+ * ページ読み込みごとに呼んでも `register()` が冪等に処理する。
+ */
+export function registerOfflineCache(): void {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    return;
+  }
+  navigator.serviceWorker.register(SERVICE_WORKER_URL).catch((err: unknown) => {
+    // eslint-disable-next-line no-console
+    console.warn("Service Workerの登録に失敗しました:", err);
+  });
 }
 
 function loadScriptOnce(src: string): Promise<void> {

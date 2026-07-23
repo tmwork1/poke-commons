@@ -118,6 +118,7 @@
 				initEngine,
 				calcDamages,
 				isEngineReady,
+				registerOfflineCache,
 				type EngineProgress,
 			} from "../../lib/pyodide-engine";
 
@@ -219,6 +220,9 @@
 
 			renderProgress({ status: "idle", message: "未初期化(ボタンを押すまでPyodideはロードされません)" });
 			void loadAutocomplete();
+			// Pyodide自体のロードは開始しない(SW登録のみ)。2回目以降の訪問で
+			// pyodide.js/wheelの再ダウンロードを避けるため、ページ読み込み時に登録しておく。
+			registerOfflineCache();
 		</script>
 	</body>
 </html>
