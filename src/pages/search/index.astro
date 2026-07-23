@@ -1,0 +1,282 @@
+---
+// Phase 4-2: 検索UI(ポケモン・技・特性・持ち物の横断検索)。
+// Phase 4-3: 「最近注目されているもの」表示枠(GET /api/suggestions?kind=trending_search)。
+//
+// 設計方針は damage-calc/index.astro を踏襲する:
+//   - このページ自体は SSR のプレースホルダー(静的なフォームの描画のみ)。
+//   - 検索・サジェスト取得はすべて下部の <script>(ブラウザ専用)に閉じ込める。
+//   - 素のDOM操作(el<T>() ヘルパー)、フレームワーク非導入。
+//
+// POST /api/search の契約(Phase 4-1で実装済み):
+//   Body: { query: string, category?: "pokemon" | "move" | "ability" | "item" }
+//   Response: { data: { query, category, hitCount, results: { pokemon, move, ability, item } } }
+// 特性・持ち物は詳細ページを作らない(jpokeに説明文データが無いため)ので、
+// 検索結果では名前のみ表示しリンクは張らない。
+---
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>検索 | Poke-Commons</title>
+		<style>
+			body {
+				font-family: system-ui, sans-serif;
+				max-width: 720px;
+				margin: 2rem auto;
+				padding: 0 1rem;
+				line-height: 1.6;
+			}
+			h1 { font-size: 1.5rem; }
+			h2 { font-size: 1.15rem; }
+			h3 { font-size: 1rem; margin-bottom: 0.3rem; }
+			section {
+				border: 1px solid #ccc;
+				border-radius: 8px;
+				padding: 1rem;
+				margin: 1rem 0;
+			}
+			.row { margin: 0.5rem 0; }
+			label { display: inline-block; min-width: 5em; }
+			input[type="text"] {
+				padding: 0.4em 0.6em;
+				font-size: 1rem;
+				width: 100%;
+				max-width: 24em;
+				box-sizing: border-box;
+			}
+			.radio-label { min-width: auto; font-weight: normal; margin-right: 1rem; }
+			#search-status { color: #555; font-size: 0.9em; }
+			.result-block { margin: 0.8rem 0; }
+			.result-block ul { padding-left: 1.2em; }
+			.result-block a { text-decoration: none; }
+			.result-block a:hover { text-decoration: underline; }
+			.suggestion-empty { color: #666; font-style: italic; }
+		</style>
+	</head>
+	<body>
+		<h1>検索</h1>
+		<p><a href="/">トップへ戻る</a></p>
+
+		<section>
+			<h2>キーワード検索</h2>
+			<div class="row">
+				<label for="query">キーワード</label>
+				<input id="query" type="text" autocomplete="off" placeholder="ポケモン名・技名・特性名・持ち物名の一部" />
+			</div>
+			<div class="row">
+				<span>カテゴリ</span>
+				<label class="radio-label"><input type="radio" name="category" value="" checked /> すべて</label>
+				<label class="radio-label"><input type="radio" name="category" value="pokemon" /> ポケモン</label>
+				<label class="radio-label"><input type="radio" name="category" value="move" /> 技</label>
+				<label class="radio-label"><input type="radio" name="category" value="ability" /> 特性</label>
+				<label class="radio-label"><input type="radio" name="category" value="item" /> 持ち物</label>
+			</div>
+			<p id="search-status">キーワードを入力してください</p>
+		</section>
+
+		<section id="results-section" hidden>
+			<h2>検索結果</h2>
+			<div class="result-block" id="result-pokemon-block" hidden>
+				<h3>ポケモン</h3>
+				<ul id="result-pokemon"></ul>
+			</div>
+			<div class="result-block" id="result-move-block" hidden>
+				<h3>技</h3>
+				<ul id="result-move"></ul>
+			</div>
+			<div class="result-block" id="result-ability-block" hidden>
+				<h3>特性</h3>
+				<ul id="result-ability"></ul>
+			</div>
+			<div class="result-block" id="result-item-block" hidden>
+				<h3>持ち物</h3>
+				<ul id="result-item"></ul>
+			</div>
+		</section>
+
+		<section>
+			<h2>最近注目されているもの</h2>
+			<p>みんなの検索から傾向が見えてくると、ここに表示されます。</p>
+			<div id="trending-search">読み込み中...</div>
+		</section>
+
+		<script>
+			import { toPokemonPathSegment } from "../../lib/pokemon-slug";
+
+			function el<T extends HTMLElement>(id: string): T {
+				const found = document.getElementById(id);
+				if (!found) {
+					throw new Error(`要素が見つかりません: #${id}`);
+				}
+				return found as T;
+			}
+
+			const queryInput = el<HTMLInputElement>("query");
+			const statusEl = el<HTMLElement>("search-status");
+			const resultsSection = el<HTMLElement>("results-section");
+			const trendingEl = el<HTMLElement>("trending-search");
+
+			type SearchCategory = "pokemon" | "move" | "ability" | "item";
+
+			// linkBase が null のカテゴリ(特性・持ち物)は詳細ページを作らないため、
+			// 検索結果では名前のみを表示しリンクを張らない。
+			const CATEGORY_CONFIG: Array<{ key: SearchCategory; linkBase: string | null }> = [
+				{ key: "pokemon", linkBase: "/pokemon/" },
+				{ key: "move", linkBase: "/moves/" },
+				{ key: "ability", linkBase: null },
+				{ key: "item", linkBase: null },
+			];
+
+			interface SearchResultItem {
+				name: string;
+			}
+
+			interface SearchResponseData {
+				query: string;
+				category: SearchCategory | null;
+				hitCount: number;
+				results: Record<SearchCategory, SearchResultItem[]>;
+			}
+
+			function getSelectedCategory(): string {
+				const checked = document.querySelector<HTMLInputElement>('input[name="category"]:checked');
+				return checked?.value ?? "";
+			}
+
+			function renderResults(data: SearchResponseData | null): void {
+				if (!data) {
+					resultsSection.hidden = true;
+					return;
+				}
+				let anyVisible = false;
+				for (const { key, linkBase } of CATEGORY_CONFIG) {
+					const block = el<HTMLElement>(`result-${key}-block`);
+					const list = el<HTMLUListElement>(`result-${key}`);
+					const items = data.results[key] ?? [];
+					list.innerHTML = "";
+					if (items.length === 0) {
+						block.hidden = true;
+						continue;
+					}
+					anyVisible = true;
+					block.hidden = false;
+					for (const item of items) {
+						const li = document.createElement("li");
+						if (linkBase) {
+							const a = document.createElement("a");
+							// ポケモン名の一部("ジガルデ(50%)"等)はURLパスセグメントとして
+							// そのまま使えないため、詳細ページ側と同じ変換をここでも通す
+							// (src/lib/pokemon-slug.ts 参照)。技名には該当する例外は無い。
+							const pathSegment = key === "pokemon" ? toPokemonPathSegment(item.name) : item.name;
+							a.href = linkBase + encodeURIComponent(pathSegment);
+							a.textContent = item.name;
+							li.appendChild(a);
+						} else {
+							li.textContent = item.name;
+						}
+						list.appendChild(li);
+					}
+				}
+				resultsSection.hidden = !anyVisible;
+			}
+
+			// 連打・デバウンス後の応答が前後することがあるため、最新のリクエストのみ描画を反映する。
+			let searchToken = 0;
+
+			async function runSearch(): Promise<void> {
+				const query = queryInput.value.trim();
+				if (!query) {
+					statusEl.textContent = "キーワードを入力してください";
+					renderResults(null);
+					return;
+				}
+				const category = getSelectedCategory();
+				const token = ++searchToken;
+				statusEl.textContent = "検索中...";
+				try {
+					const res = await fetch("/api/search", {
+						method: "POST",
+						credentials: "same-origin",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(category ? { query, category } : { query }),
+					});
+					if (token !== searchToken) return;
+					if (!res.ok) {
+						statusEl.textContent = `検索に失敗しました (status=${res.status})`;
+						renderResults(null);
+						return;
+					}
+					const body = (await res.json()) as { data: SearchResponseData };
+					statusEl.textContent = body.data.hitCount === 0 ? "該当なし" : `${body.data.hitCount}件ヒットしました`;
+					renderResults(body.data);
+				} catch (err) {
+					if (token !== searchToken) return;
+					console.error(err);
+					statusEl.textContent = "検索に失敗しました";
+					renderResults(null);
+				}
+			}
+
+			let debounceTimer: number | undefined;
+			function scheduleSearch(): void {
+				if (debounceTimer !== undefined) {
+					window.clearTimeout(debounceTimer);
+				}
+				debounceTimer = window.setTimeout(() => {
+					void runSearch();
+				}, 300);
+			}
+
+			queryInput.addEventListener("input", scheduleSearch);
+			document.querySelectorAll<HTMLInputElement>('input[name="category"]').forEach((radio) => {
+				radio.addEventListener("change", scheduleSearch);
+			});
+
+			// --- Phase 4-3: 「最近注目されているもの」表示枠 ---
+			// suggestions テーブルは Phase 5 まで空のため、空状態表示になる
+			// (damage-calc/index.astro のサジェスト空枠と同じパターン)。
+			interface SuggestionItem {
+				kind: string;
+				subject_key: string;
+				payload: unknown;
+				computed_at: string;
+			}
+
+			async function loadTrendingSearches(): Promise<void> {
+				try {
+					const res = await fetch("/api/suggestions?kind=trending_search&limit=10", {
+						credentials: "same-origin",
+					});
+					if (!res.ok) {
+						console.warn(`サジェスト取得に失敗しました (status=${res.status})`);
+						trendingEl.textContent = "読み込みに失敗しました";
+						return;
+					}
+					const body = (await res.json()) as { data?: SuggestionItem[] };
+					const items = body.data ?? [];
+					trendingEl.innerHTML = "";
+					if (items.length === 0) {
+						const p = document.createElement("p");
+						p.className = "suggestion-empty";
+						p.textContent = "まだデータがありません(集合知はこれから育っていきます)";
+						trendingEl.appendChild(p);
+						return;
+					}
+					const ul = document.createElement("ul");
+					for (const item of items) {
+						const li = document.createElement("li");
+						li.textContent = JSON.stringify(item.payload);
+						ul.appendChild(li);
+					}
+					trendingEl.appendChild(ul);
+				} catch (err) {
+					console.warn("サジェスト取得に失敗しました", err);
+					trendingEl.textContent = "読み込みに失敗しました";
+				}
+			}
+
+			void loadTrendingSearches();
+		</script>
+	</body>
+</html>
