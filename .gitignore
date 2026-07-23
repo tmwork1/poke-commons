@@ -38,3 +38,9 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# Playwright (Phase 2-5 E2E回帰テスト) の実行結果・レポート・トレース
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

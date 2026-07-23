@@ -1,0 +1,112 @@
+[
+  {
+    "id": "baseline_physical_normal",
+    "description": "通常物理技(タイプ相性等倍・特性/持ち物なし): ヒトカゲ「ひっかく」vs ゼニガメ",
+    "attacker": { "name": "ヒトカゲ", "moveNames": ["ひっかく"] },
+    "defender": { "name": "ゼニガメ" },
+    "moveName": "ひっかく",
+    "seed": 7,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "baseline_special_type_resist",
+    "description": "通常特殊技(タイプ相性いまひとつ): ピカチュウ「でんきショック」vs フシギダネ、seed=1(Phase 0 PoCと同一条件)",
+    "attacker": { "name": "ピカチュウ", "moveNames": ["でんきショック"] },
+    "defender": { "name": "フシギダネ" },
+    "moveName": "でんきショック",
+    "seed": 1,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "type_super_effective",
+    "description": "タイプ相性こうかばつぐん: ヒトカゲ「ひのこ」vs フシギダネ(くさ/どく)",
+    "attacker": { "name": "ヒトカゲ", "moveNames": ["ひのこ"] },
+    "defender": { "name": "フシギダネ" },
+    "moveName": "ひのこ",
+    "seed": 3,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "ability_pure_power",
+    "description": "特性が絡む技(ちからもち: 物理技の攻撃実数値を2倍): ピカチュウ(ちからもち)「たいあたり」vs ピカチュウ",
+    "attacker": { "name": "ピカチュウ", "abilityName": "ちからもち", "moveNames": ["たいあたり"] },
+    "defender": { "name": "ピカチュウ" },
+    "moveName": "たいあたり",
+    "seed": 5,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "ability_hustle",
+    "description": "特性が絡む技(はりきり: 物理技の攻撃実数値を1.5倍): ピカチュウ(はりきり)「たいあたり」vs ピカチュウ",
+    "attacker": { "name": "ピカチュウ", "abilityName": "はりきり", "moveNames": ["たいあたり"] },
+    "defender": { "name": "ピカチュウ" },
+    "moveName": "たいあたり",
+    "seed": 5,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "item_choice_band",
+    "description": "持ち物が絡む技(こだわりハチマキ: 物理技の攻撃実数値を1.5倍): ピカチュウ(こだわりハチマキ)「たいあたり」vs ピカチュウ",
+    "attacker": { "name": "ピカチュウ", "itemName": "こだわりハチマキ", "moveNames": ["たいあたり"] },
+    "defender": { "name": "ピカチュウ" },
+    "moveName": "たいあたり",
+    "seed": 5,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "critical_fixed",
+    "description": "急所固定(critical=true): ピカチュウ「たいあたり」vs ピカチュウ",
+    "attacker": { "name": "ピカチュウ", "moveNames": ["たいあたり"] },
+    "defender": { "name": "ピカチュウ" },
+    "moveName": "たいあたり",
+    "seed": 2,
+    "critical": true,
+    "field": {},
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "multi_hit_move",
+    "description": "多段技: ピカチュウ「みだれひっかき」vs フシギダネ(calc_lethalも併せて検証)",
+    "attacker": { "name": "ピカチュウ", "moveNames": ["みだれひっかき"] },
+    "defender": { "name": "フシギダネ" },
+    "moveName": "みだれひっかき",
+    "seed": 9,
+    "critical": false,
+    "field": {},
+    "maxLethalAttackCount": 4
+  },
+  {
+    "id": "field_terrain",
+    "description": "フィールド状態(地形): エレキフィールドで「でんきショック」が強化される。ピカチュウ vs フシギダネ",
+    "attacker": { "name": "ピカチュウ", "moveNames": ["でんきショック"] },
+    "defender": { "name": "フシギダネ" },
+    "moveName": "でんきショック",
+    "seed": 1,
+    "critical": false,
+    "field": { "terrain": "エレキフィールド" },
+    "maxLethalAttackCount": 6
+  },
+  {
+    "id": "field_side_wall",
+    "description": "フィールド状態(壁): 防御側のリフレクターで物理技ダメージが軽減される。カビゴン「たいあたり」vs カビゴン",
+    "attacker": { "name": "カビゴン", "moveNames": ["たいあたり"] },
+    "defender": { "name": "カビゴン" },
+    "moveName": "たいあたり",
+    "seed": 4,
+    "critical": false,
+    "field": { "defenderSideFields": ["リフレクター"] },
+    "maxLethalAttackCount": 6
+  }
+]

@@ -1,0 +1,79 @@
+---
+// Phase 2-5: E2E回帰テスト専用の最小ハーネスページ。
+//
+// **これはPlaywrightのE2Eテスト (tests/e2e/damage-calc.spec.ts) からのみ使う、
+// テスト専用ページです。** 本番導線には一切リンクされない。
+//
+// damage-calc-poc (Phase 1-7の動作確認ページ) はDOM入力フォーム経由でしか
+// 計算を実行できず、努力値・特性・持ち物・フィールド状態などを網羅的に
+// スクリプトから叩けない。このページは `src/lib/pyodide-engine.ts` の
+// `initEngine()` / `calcDamages()` をそのまま `window` に晒すだけの薄いラッパーで、
+// Playwright は `page.evaluate()` で直接これらの関数を呼び出し、任意の
+// PokemonSpec / FieldSpec / CalcDamagesOptions を渡してブラウザ内Pyodide経由の
+// 計算結果を取得する。
+---
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>E2Eテストハーネス (非公開・テスト専用) | Poke-Commons</title>
+	</head>
+	<body>
+		<h1>E2Eテストハーネス</h1>
+		<p>
+			このページはPlaywright E2Eテスト (Phase 2-5) 専用です。UIはありません。
+			<code>window.__pyodideEngine__</code> 経由で <code>src/lib/pyodide-engine.ts</code> の
+			API を直接呼び出せます。
+		</p>
+		<p id="harness-ready" data-ready="false">initializing</p>
+
+		<script>
+			import { initEngine, calcDamages, isEngineReady, getEngineProgress } from "../../lib/pyodide-engine";
+			import type {
+				PokemonSpec,
+				FieldSpec,
+				CalcDamagesOptions,
+				CalcDamagesResult,
+			} from "../../lib/pyodide-engine";
+
+			// Playwrightからテスト対象APIを直接呼び出せるよう window に公開する。
+			// テスト専用のグローバル変数であり、本番ページ (damage-calc-poc / damage-calc) には
+			// 一切登録しない。
+			declare global {
+				interface Window {
+					__pyodideEngine__: {
+						init: () => Promise<{ status: string; message: string }>;
+						calc: (
+							attacker: PokemonSpec,
+							defender: PokemonSpec,
+							moveName: string,
+							options?: CalcDamagesOptions,
+						) => Promise<CalcDamagesResult>;
+						isReady: () => boolean;
+					};
+				}
+			}
+
+			window.__pyodideEngine__ = {
+				init: () =>
+					new Promise((resolve, reject) => {
+						initEngine((progress) => {
+							if (progress.status === "ready") {
+								resolve({ status: progress.status, message: progress.message });
+							} else if (progress.status === "error") {
+								reject(new Error(progress.message));
+							}
+						}).catch(reject);
+					}),
+				calc: (attacker, defender, moveName, options) =>
+					calcDamages(attacker, defender, moveName, options ?? {}),
+				isReady: () => isEngineReady(),
+			};
+
+			const readyEl = document.getElementById("harness-ready") as HTMLElement;
+			readyEl.dataset.ready = "true";
+			readyEl.textContent = "harness ready: " + JSON.stringify(getEngineProgress());
+		</script>
+	</body>
+</html>

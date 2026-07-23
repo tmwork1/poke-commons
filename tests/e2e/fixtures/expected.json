@@ -1,0 +1,406 @@
+{
+  "baseline_physical_normal": {
+    "damages": [
+      13,
+      13,
+      13,
+      14,
+      14,
+      14,
+      14,
+      14,
+      14,
+      15,
+      15,
+      15,
+      15,
+      15,
+      15,
+      16
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 5,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 6,
+        "probability": 0.0
+      }
+    ]
+  },
+  "baseline_special_type_resist": {
+    "damages": [
+      9,
+      9,
+      9,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      11,
+      11,
+      11,
+      11,
+      11,
+      11,
+      12
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 5,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 6,
+        "probability": 0.0
+      }
+    ]
+  },
+  "type_super_effective": {
+    "damages": [
+      44,
+      44,
+      44,
+      44,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      50,
+      50,
+      50,
+      50,
+      50,
+      54
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 1.0
+      }
+    ]
+  },
+  "ability_pure_power": {
+    "damages": [
+      39,
+      39,
+      40,
+      40,
+      40,
+      41,
+      41,
+      42,
+      42,
+      43,
+      43,
+      44,
+      44,
+      45,
+      45,
+      46
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 1.0
+      }
+    ]
+  },
+  "ability_hustle": {
+    "damages": [
+      28,
+      29,
+      29,
+      29,
+      30,
+      30,
+      30,
+      31,
+      31,
+      31,
+      32,
+      32,
+      32,
+      33,
+      33,
+      34
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 1.0
+      }
+    ]
+  },
+  "item_choice_band": {
+    "damages": [
+      28,
+      29,
+      29,
+      29,
+      30,
+      30,
+      30,
+      31,
+      31,
+      31,
+      32,
+      32,
+      32,
+      33,
+      33,
+      34
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 1.0
+      }
+    ]
+  },
+  "critical_fixed": {
+    "damages": [
+      30,
+      30,
+      31,
+      31,
+      32,
+      32,
+      32,
+      33,
+      33,
+      33,
+      34,
+      34,
+      34,
+      35,
+      35,
+      36
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 1.0
+      }
+    ]
+  },
+  "multi_hit_move": {
+    "damages": [
+      8,
+      8,
+      8,
+      8,
+      8,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      10
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 0.0
+      }
+    ]
+  },
+  "field_terrain": {
+    "damages": [
+      12,
+      12,
+      12,
+      12,
+      12,
+      13,
+      13,
+      13,
+      13,
+      13,
+      14,
+      14,
+      14,
+      14,
+      14,
+      15
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 5,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 6,
+        "probability": 0.0
+      }
+    ]
+  },
+  "field_side_wall": {
+    "damages": [
+      17,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      19,
+      19,
+      19,
+      19,
+      20,
+      20,
+      20,
+      21
+    ],
+    "lethal": [
+      {
+        "attackCount": 1,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 2,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 3,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 4,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 5,
+        "probability": 0.0
+      },
+      {
+        "attackCount": 6,
+        "probability": 0.0
+      }
+    ]
+  }
+}

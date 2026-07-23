@@ -24,6 +24,28 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  e2e:
+    # Phase 2-5: jpoke ネイティブ実行とブラウザ(Chromium上のPyodide)実行の等価性回帰テスト。
+    # `npm run build` (wheelビルド含む) 後に `astro preview` で静的アセット一式を配信し、
+    # Playwrightで実ブラウザから src/lib/pyodide-engine.ts の計算結果を検証する。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python build frontend
+        run: pip install build
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E regression tests (build → preview → Playwright)
+        run: npm run test:e2e
+
   migrations:
     runs-on: ubuntu-latest
     services:
